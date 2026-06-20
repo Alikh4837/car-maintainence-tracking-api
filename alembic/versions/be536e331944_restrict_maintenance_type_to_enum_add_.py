@@ -1,8 +1,8 @@
-"""initial migration
+"""restrict maintenance_type to enum, add cost/date rules
 
-Revision ID: b0f3513c50ff
+Revision ID: be536e331944
 Revises: 
-Create Date: 2026-06-20 16:05:26.575322
+Create Date: 2026-06-20 16:39:20.552418
 
 """
 from alembic import op
@@ -12,7 +12,7 @@ import sqlmodel.sql.sqltypes
 
 
 # revision identifiers, used by Alembic.
-revision = 'b0f3513c50ff'
+revision = 'be536e331944'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -33,7 +33,7 @@ def upgrade() -> None:
         batch_op.create_index(batch_op.f('ix_vehicle_make'), ['make'], unique=False)
 
     op.create_table('maintenancerecord',
-    sa.Column('maintenance_type', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('maintenance_type', sa.Enum('OIL_CHANGE', 'TIRE_ROTATION', 'BRAKE_SERVICE', 'BATTERY_REPLACEMENT', 'ENGINE_TUNE_UP', 'AIR_FILTER_REPLACEMENT', 'GENERAL_INSPECTION', 'OTHER', name='maintenancetype'), nullable=False),
     sa.Column('service_date', sa.Date(), nullable=False),
     sa.Column('cost', sa.Float(), nullable=False),
     sa.Column('id', sa.Integer(), nullable=False),
