@@ -1,16 +1,7 @@
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 
-import app.models  # noqa: F401 — registers all models on Base.metadata
-from app.database.connection import Base, engine
+import app.models  # noqa: F401 — registers all models on SQLModel.metadata
 from app.routers import maintainence, vehicles
-
-
-# @asynccontextmanager
-# async def lifespan(app: FastAPI):
-#     Base.metadata.create_all(bind=engine)
-#     yield
 
 
 app = FastAPI(title="Car Maintenance Tracker API")

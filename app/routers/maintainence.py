@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlmodel import Session, select
 
 from app.database.session import get_db
 from app.models.maintainence import MaintenanceRecord
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/maintenance-records", tags=["Maintenance Records"])
 def create_maintenance_record(
     record: MaintenanceRecordCreate, db: Session = Depends(get_db)
 ):
-    vehicle = db.query(Vehicle).filter(Vehicle.id == record.vehicle_id).first()
+    vehicle = db.get(Vehicle, record.vehicle_id)
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found")
 
@@ -26,14 +26,12 @@ def create_maintenance_record(
 
 @router.get("/", response_model=list[MaintenanceRecordResponse])
 def get_maintenance_records(db: Session = Depends(get_db)):
-    return db.query(MaintenanceRecord).all()
+    return db.exec(select(MaintenanceRecord)).all()
 
 
 @router.get("/{record_id}", response_model=MaintenanceRecordResponse)
 def get_maintenance_record(record_id: int, db: Session = Depends(get_db)):
-    record = (
-        db.query(MaintenanceRecord).filter(MaintenanceRecord.id == record_id).first()
-    )
+    record = db.get(MaintenanceRecord, record_id)
     if not record:
         raise HTTPException(status_code=404, detail="Maintenance record not found")
     return record
@@ -43,9 +41,7 @@ def get_maintenance_record(record_id: int, db: Session = Depends(get_db)):
 def update_maintenance_record(
     record_id: int, record_data: MaintenanceRecordCreate, db: Session = Depends(get_db)
 ):
-    record = (
-        db.query(MaintenanceRecord).filter(MaintenanceRecord.id == record_id).first()
-    )
+    record = db.get(MaintenanceRecord, record_id)
     if not record:
         raise HTTPException(status_code=404, detail="Maintenance record not found")
 
@@ -54,6 +50,7 @@ def update_maintenance_record(
     record.service_date = record_data.service_date
     record.cost = record_data.cost
 
+    db.add(record)
     db.commit()
     db.refresh(record)
     return record
@@ -61,9 +58,7 @@ def update_maintenance_record(
 
 @router.delete("/{record_id}")
 def delete_maintenance_record(record_id: int, db: Session = Depends(get_db)):
-    record = (
-        db.query(MaintenanceRecord).filter(MaintenanceRecord.id == record_id).first()
-    )
+    record = db.get(MaintenanceRecord, record_id)
     if not record:
         raise HTTPException(status_code=404, detail="Maintenance record not found")
 

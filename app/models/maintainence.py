@@ -1,13 +1,24 @@
-from sqlalchemy import Column, Date, Float, ForeignKey, Integer, String
+from datetime import date
+from typing import Optional, TYPE_CHECKING
 
-from app.database.connection import Base
+from sqlmodel import Field, Relationship, SQLModel
+
+if TYPE_CHECKING:
+    from app.models.vehicle import Vehicle
 
 
-class MaintenanceRecord(Base):
-    __tablename__ = "maintenance_records"
+class MaintenanceRecordBase(SQLModel):
+    """Fields shared by the DB table and the request/response schemas."""
 
-    id = Column(Integer, primary_key=True)
-    vehicle_id = Column(Integer, ForeignKey("vehicles.id"))
-    maintenance_type = Column(String)
-    service_date = Column(Date)
-    cost = Column(Float)
+    maintenance_type: str
+    service_date: date
+    cost: float
+
+
+class MaintenanceRecord(MaintenanceRecordBase, table=True):
+    # __tablename__ = "maintenance_records"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    vehicle_id: int = Field(foreign_key="vehicle.id")
+
+    vehicle: Optional["Vehicle"] = Relationship(back_populates="maintenance_records")

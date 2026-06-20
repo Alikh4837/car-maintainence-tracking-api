@@ -1,13 +1,25 @@
-from sqlalchemy import Column, Integer, String
+from typing import List, Optional, TYPE_CHECKING
 
-from app.database.connection import Base
+from sqlmodel import Field, Relationship, SQLModel
+
+if TYPE_CHECKING:
+    from app.models.maintainence import MaintenanceRecord
 
 
-class Vehicle(Base):
-    __tablename__ = "vehicles"
+class VehicleBase(SQLModel):
+    """Fields shared by the DB table and the request/response schemas."""
 
-    id = Column(Integer, primary_key=True)
-    make = Column(String, index=True)
-    model = Column(String)
-    year = Column(Integer)
-    license_plate = Column(String, index=True)
+    make: str = Field(index=True)
+    model: str
+    year: int
+    license_plate: str = Field(index=True)
+
+
+class Vehicle(VehicleBase, table=True):
+    # __tablename__ = "vehicles"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    maintenance_records: List["MaintenanceRecord"] = Relationship(
+        back_populates="vehicle"
+    )

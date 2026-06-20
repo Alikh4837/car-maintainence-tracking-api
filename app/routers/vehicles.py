@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlmodel import Session, select
 
 from app.database.session import get_db
 from app.models.vehicle import Vehicle
@@ -19,12 +19,12 @@ def create_vehicle(vehicle: VehicleCreate, db: Session = Depends(get_db)):
 
 @router.get("/", response_model=list[VehicleResponse])
 def get_vehicles(db: Session = Depends(get_db)):
-    return db.query(Vehicle).all()
+    return db.exec(select(Vehicle)).all()
 
 
 @router.get("/{vehicle_id}", response_model=VehicleResponse)
 def get_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
-    vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+    vehicle = db.get(Vehicle, vehicle_id)
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found")
     return vehicle
@@ -34,7 +34,7 @@ def get_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
 def update_vehicle(
     vehicle_id: int, vehicle_data: VehicleCreate, db: Session = Depends(get_db)
 ):
-    vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+    vehicle = db.get(Vehicle, vehicle_id)
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found")
 
@@ -43,6 +43,7 @@ def update_vehicle(
     vehicle.year = vehicle_data.year
     vehicle.license_plate = vehicle_data.license_plate
 
+    db.add(vehicle)
     db.commit()
     db.refresh(vehicle)
     return vehicle
@@ -50,7 +51,7 @@ def update_vehicle(
 
 @router.delete("/{vehicle_id}")
 def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
-    vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+    vehicle = db.get(Vehicle, vehicle_id)
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found")
 
