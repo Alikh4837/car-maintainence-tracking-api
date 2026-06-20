@@ -1,4 +1,7 @@
+from typing import List
+
 from app.models.vehicle import VehicleBase
+from app.schemas.maintainence import MaintenanceRecordResponse
 
 
 class VehicleCreate(VehicleBase):
@@ -8,6 +11,7 @@ class VehicleCreate(VehicleBase):
 
 
 class VehicleResponse(VehicleBase):
-    """What we return to the client — adds the generated id."""
+    """What we return to the client — adds the generated id and its service history."""
 
     id: int
+    maintenance_records: List[MaintenanceRecordResponse] = []

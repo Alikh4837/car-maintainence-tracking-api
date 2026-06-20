@@ -17,3 +17,12 @@ class MaintenanceType(str, Enum):
     AIR_FILTER_REPLACEMENT = "Air Filter Replacement"
     GENERAL_INSPECTION = "General Inspection"
     OTHER = "Other"
+
+
+class FuelType(str, Enum):
+    """The fixed set of fuel types a vehicle can run on."""
+
+    PETROL = "Petrol"
+    DIESEL = "Diesel"
+    ELECTRIC = "Electric"
+    HYBRID = "Hybrid"

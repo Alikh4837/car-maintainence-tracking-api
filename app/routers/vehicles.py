@@ -42,6 +42,8 @@ def update_vehicle(
     vehicle.model = vehicle_data.model
     vehicle.year = vehicle_data.year
     vehicle.license_plate = vehicle_data.license_plate
+    vehicle.current_mileage = vehicle_data.current_mileage
+    vehicle.fuel_type = vehicle_data.fuel_type
 
     db.add(vehicle)
     db.commit()

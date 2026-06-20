@@ -1,8 +1,8 @@
-"""restrict maintenance_type to enum, add cost/date rules
+"""addition of new columns
 
-Revision ID: be536e331944
+Revision ID: b15d12e4f6c7
 Revises: 
-Create Date: 2026-06-20 16:39:20.552418
+Create Date: 2026-06-20 18:20:35.045254
 
 """
 from alembic import op
@@ -12,7 +12,7 @@ import sqlmodel.sql.sqltypes
 
 
 # revision identifiers, used by Alembic.
-revision = 'be536e331944'
+revision = 'b15d12e4f6c7'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -25,6 +25,8 @@ def upgrade() -> None:
     sa.Column('model', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('year', sa.Integer(), nullable=False),
     sa.Column('license_plate', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('current_mileage', sa.Integer(), nullable=False),
+    sa.Column('fuel_type', sa.Enum('PETROL', 'DIESEL', 'ELECTRIC', 'HYBRID', name='fueltype'), nullable=False),
     sa.Column('id', sa.Integer(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
@@ -36,6 +38,11 @@ def upgrade() -> None:
     sa.Column('maintenance_type', sa.Enum('OIL_CHANGE', 'TIRE_ROTATION', 'BRAKE_SERVICE', 'BATTERY_REPLACEMENT', 'ENGINE_TUNE_UP', 'AIR_FILTER_REPLACEMENT', 'GENERAL_INSPECTION', 'OTHER', name='maintenancetype'), nullable=False),
     sa.Column('service_date', sa.Date(), nullable=False),
     sa.Column('cost', sa.Float(), nullable=False),
+    sa.Column('mileage_at_service', sa.Integer(), nullable=False),
+    sa.Column('service_provider', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('next_service_due_date', sa.Date(), nullable=True),
+    sa.Column('notes', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+    sa.Column('warranty_covered', sa.Boolean(), nullable=False),
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('vehicle_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['vehicle_id'], ['vehicle.id'], ),

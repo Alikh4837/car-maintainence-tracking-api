@@ -49,6 +49,11 @@ def update_maintenance_record(
     record.maintenance_type = record_data.maintenance_type
     record.service_date = record_data.service_date
     record.cost = record_data.cost
+    record.mileage_at_service = record_data.mileage_at_service
+    record.service_provider = record_data.service_provider
+    record.next_service_due_date = record_data.next_service_due_date
+    record.notes = record_data.notes
+    record.warranty_covered = record_data.warranty_covered
 
     db.add(record)
     db.commit()

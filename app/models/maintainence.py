@@ -16,6 +16,11 @@ class MaintenanceRecordBase(SQLModel):
     maintenance_type: MaintenanceType
     service_date: date
     cost: float = Field(gt=0)
+    mileage_at_service: int = Field(ge=0)
+    service_provider: str
+    next_service_due_date: Optional[date] = None
+    notes: Optional[str] = None
+    warranty_covered: bool = False
 
     @field_validator("service_date")
     @classmethod
