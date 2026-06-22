@@ -8,6 +8,7 @@ from app.models.enums import MaintenanceType
 
 if TYPE_CHECKING:
     from app.models.vehicle import Vehicle
+    from app.models.service_provider import ServiceProvider
 
 
 class MaintenanceRecordBase(SQLModel):
@@ -17,7 +18,6 @@ class MaintenanceRecordBase(SQLModel):
     service_date: date
     cost: float = Field(gt=0)
     mileage_at_service: int = Field(ge=0)
-    service_provider: str
     next_service_due_date: Optional[date] = None
     notes: Optional[str] = None
     warranty_covered: bool = False
@@ -33,5 +33,7 @@ class MaintenanceRecordBase(SQLModel):
 class MaintenanceRecord(MaintenanceRecordBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     vehicle_id: int = Field(foreign_key="vehicle.id")
+    service_provider_id: Optional[int] = Field(default=None, foreign_key="service_provider.id")
 
     vehicle: Optional["Vehicle"] = Relationship(back_populates="maintenance_records")
+    provider: Optional["ServiceProvider"] = Relationship(back_populates="maintenance_records")

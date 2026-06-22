@@ -1,10 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import date
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from app.database.session import get_db
+from app.models.enums import MaintenanceType
 from app.models.maintainence import MaintenanceRecord
+from app.models.service_provider import ServiceProvider
 from app.models.vehicle import Vehicle
-from app.schemas.maintainence import MaintenanceRecordCreate, MaintenanceRecordResponse
+from app.schemas.maintainence import (
+    MaintenanceRecordCreate,
+    MaintenanceRecordResponse,
+    MaintenanceRecordUpdate,
+)
 
 router = APIRouter(prefix="/maintenance-records", tags=["Maintenance Records"])
 
@@ -17,6 +26,21 @@ def create_maintenance_record(
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found")
 
+    if record.mileage_at_service > vehicle.current_mileage:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"mileage_at_service ({record.mileage_at_service}) cannot exceed "
+                f"the vehicle's current mileage ({vehicle.current_mileage}). "
+                "Update the vehicle's mileage first if the odometer has advanced."
+            ),
+        )
+
+    if record.service_provider_id is not None:
+        provider = db.get(ServiceProvider, record.service_provider_id)
+        if not provider:
+            raise HTTPException(status_code=404, detail="Service provider not found")
+
     new_record = MaintenanceRecord(**record.model_dump())
     db.add(new_record)
     db.commit()
@@ -25,8 +49,34 @@ def create_maintenance_record(
 
 
 @router.get("/", response_model=list[MaintenanceRecordResponse])
-def get_maintenance_records(db: Session = Depends(get_db)):
-    return db.exec(select(MaintenanceRecord)).all()
+def get_maintenance_records(
+    vehicle_id: Optional[int] = Query(default=None, description="Filter by vehicle"),
+    maintenance_type: Optional[MaintenanceType] = Query(
+        default=None, description="Filter by type"
+    ),
+    from_date: Optional[date] = Query(
+        default=None, description="Service date on or after (YYYY-MM-DD)"
+    ),
+    to_date: Optional[date] = Query(
+        default=None, description="Service date on or before (YYYY-MM-DD)"
+    ),
+    limit: int = Query(default=20, ge=1, le=100, description="Max records to return"),
+    offset: int = Query(default=0, ge=0, description="Number of records to skip"),
+    db: Session = Depends(get_db),
+):
+    query = select(MaintenanceRecord)
+
+    if vehicle_id is not None:
+        query = query.where(MaintenanceRecord.vehicle_id == vehicle_id)
+    if maintenance_type:
+        query = query.where(MaintenanceRecord.maintenance_type == maintenance_type)
+    if from_date:
+        query = query.where(MaintenanceRecord.service_date >= from_date)
+    if to_date:
+        query = query.where(MaintenanceRecord.service_date <= to_date)
+
+    query = query.offset(offset).limit(limit)
+    return db.exec(query).all()
 
 
 @router.get("/{record_id}", response_model=MaintenanceRecordResponse)
@@ -37,23 +87,38 @@ def get_maintenance_record(record_id: int, db: Session = Depends(get_db)):
     return record
 
 
-@router.put("/{record_id}", response_model=MaintenanceRecordResponse)
-def update_maintenance_record(
-    record_id: int, record_data: MaintenanceRecordCreate, db: Session = Depends(get_db)
+@router.patch("/{record_id}", response_model=MaintenanceRecordResponse)
+def patch_maintenance_record(
+    record_id: int, record_data: MaintenanceRecordUpdate, db: Session = Depends(get_db)
 ):
+    """Partially update a maintenance record — only the fields you send will change."""
     record = db.get(MaintenanceRecord, record_id)
     if not record:
         raise HTTPException(status_code=404, detail="Maintenance record not found")
 
-    record.vehicle_id = record_data.vehicle_id
-    record.maintenance_type = record_data.maintenance_type
-    record.service_date = record_data.service_date
-    record.cost = record_data.cost
-    record.mileage_at_service = record_data.mileage_at_service
-    record.service_provider = record_data.service_provider
-    record.next_service_due_date = record_data.next_service_due_date
-    record.notes = record_data.notes
-    record.warranty_covered = record_data.warranty_covered
+    updates = record_data.model_dump(exclude_unset=True, exclude_none=True)
+
+    if "mileage_at_service" in updates:
+        target_vehicle_id = updates.get("vehicle_id", record.vehicle_id)
+        vehicle = db.get(Vehicle, target_vehicle_id)
+        if not vehicle:
+            raise HTTPException(status_code=404, detail="Vehicle not found")
+        if updates["mileage_at_service"] > vehicle.current_mileage:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"mileage_at_service ({updates['mileage_at_service']}) cannot exceed "
+                    f"the vehicle's current mileage ({vehicle.current_mileage})."
+                ),
+            )
+
+    if "service_provider_id" in updates:
+        provider = db.get(ServiceProvider, updates["service_provider_id"])
+        if not provider:
+            raise HTTPException(status_code=404, detail="Service provider not found")
+
+    for field, value in updates.items():
+        setattr(record, field, value)
 
     db.add(record)
     db.commit()

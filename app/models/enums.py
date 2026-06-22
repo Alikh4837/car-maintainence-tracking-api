@@ -2,13 +2,6 @@ from enum import Enum
 
 
 class MaintenanceType(str, Enum):
-    """The fixed set of maintenance categories the API will accept.
-
-    Inheriting from both `str` and `Enum` means each member behaves like a
-    normal string at runtime (so it serializes cleanly to JSON) while still
-    being restricted to one of the listed values.
-    """
-
     OIL_CHANGE = "Oil Change"
     TIRE_ROTATION = "Tire Rotation"
     BRAKE_SERVICE = "Brake Service"
@@ -18,11 +11,27 @@ class MaintenanceType(str, Enum):
     GENERAL_INSPECTION = "General Inspection"
     OTHER = "Other"
 
+    @classmethod
+    def _missing_(cls, value):
+        """Allow case-insensitive matching for incoming values."""
+        if isinstance(value, str):
+            for member in cls:
+                if member.value.lower() == value.lower():
+                    return member
+        return None
+
 
 class FuelType(str, Enum):
-    """The fixed set of fuel types a vehicle can run on."""
-
     PETROL = "Petrol"
     DIESEL = "Diesel"
     ELECTRIC = "Electric"
     HYBRID = "Hybrid"
+
+    @classmethod
+    def _missing_(cls, value):
+        """Allow case-insensitive matching for incoming values."""
+        if isinstance(value, str):
+            for member in cls:
+                if member.value.lower() == value.lower():
+                    return member
+        return None
