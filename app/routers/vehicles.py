@@ -1,11 +1,15 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import Session, select, col
+from fastapi import APIRouter, Depends, Query
+from sqlmodel import Session, func, select, col
+from sqlmodel.sql.expression import SelectOfScalar
 
+from app.dependencies.db_helpers import get_or_404, apply_updates
 from app.database.session import get_db
+from app.dependencies.pagination import PaginationParams, paginate
 from app.models.enums import FuelType
 from app.models.vehicle import Vehicle
+from app.schemas.pagination import PaginatedResponse
 from app.schemas.vehicle import VehicleCreate, VehicleResponse, VehicleUpdate
 
 router = APIRouter(prefix="/vehicles", tags=["Vehicles"])
@@ -20,7 +24,7 @@ def create_vehicle(vehicle: VehicleCreate, db: Session = Depends(get_db)):
     return new_vehicle
 
 
-@router.get("/", response_model=list[VehicleResponse])
+@router.get("/", response_model=PaginatedResponse[VehicleResponse])
 def get_vehicles(
     make: Optional[str] = Query(default=None, description="Filter by make e.g. Toyota"),
     year: Optional[int] = Query(default=None, description="Filter by manufacture year"),
@@ -30,36 +34,41 @@ def get_vehicles(
     include_records: bool = Query(
         default=False, description="Include maintenance history for each vehicle"
     ),
-    limit: int = Query(default=20, ge=1, le=100, description="Max records to return"),
-    offset: int = Query(default=0, ge=0, description="Number of records to skip"),
+    pagination: PaginationParams = Depends(PaginationParams),
     db: Session = Depends(get_db),
 ):
-    query = select(Vehicle)
+    data_query: SelectOfScalar[Vehicle] = select(Vehicle)
+    count_query: SelectOfScalar[int] = select(func.count()).select_from(Vehicle)
 
     if make:
-        query = query.where(col(Vehicle.make).ilike(f"%{make}%"))
+        data_query = data_query.where(col(Vehicle.make).ilike(f"%{make}%"))
+        count_query = count_query.where(col(Vehicle.make).ilike(f"%{make}%"))
     if year:
-        query = query.where(Vehicle.year == year)
+        data_query = data_query.where(Vehicle.year == year)
+        count_query = count_query.where(Vehicle.year == year)
     if fuel_type:
-        query = query.where(Vehicle.fuel_type == fuel_type)
+        data_query = data_query.where(Vehicle.fuel_type == fuel_type)
+        count_query = count_query.where(Vehicle.fuel_type == fuel_type)
 
-    query = query.offset(offset).limit(limit)
-    vehicles = db.exec(query).all()
+    result = paginate(db, data_query, count_query, pagination)
 
     if not include_records:
-        return [
-            {**vehicle.model_dump(), "maintenance_records": []} for vehicle in vehicles
-        ]
+        return PaginatedResponse(
+            items=[
+                VehicleResponse(**{**v.model_dump(), "maintenance_records": []})
+                for v in result.items
+            ],
+            total=result.total,
+            limit=result.limit,
+            offset=result.offset,
+        )
 
-    return vehicles
+    return result
 
 
 @router.get("/{vehicle_id}", response_model=VehicleResponse)
 def get_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
-    vehicle = db.get(Vehicle, vehicle_id)
-    if not vehicle:
-        raise HTTPException(status_code=404, detail="Vehicle not found")
-    return vehicle
+    return get_or_404(db, Vehicle, vehicle_id)
 
 
 @router.patch("/{vehicle_id}", response_model=VehicleResponse)
@@ -67,26 +76,13 @@ def patch_vehicle(
     vehicle_id: int, vehicle_data: VehicleUpdate, db: Session = Depends(get_db)
 ):
     """Partially update a vehicle — only the fields you send will change."""
-    vehicle = db.get(Vehicle, vehicle_id)
-    if not vehicle:
-        raise HTTPException(status_code=404, detail="Vehicle not found")
-
-    # exclude_unset=True means fields the caller didn't send are ignored entirely
-    updates = vehicle_data.model_dump(exclude_unset=True)
-    for field, value in updates.items():
-        setattr(vehicle, field, value)
-
-    db.add(vehicle)
-    db.commit()
-    db.refresh(vehicle)
-    return vehicle
+    vehicle = get_or_404(db, Vehicle, vehicle_id)
+    return apply_updates(db, vehicle, vehicle_data)
 
 
 @router.delete("/{vehicle_id}")
 def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
-    vehicle = db.get(Vehicle, vehicle_id)
-    if not vehicle:
-        raise HTTPException(status_code=404, detail="Vehicle not found")
+    vehicle = get_or_404(db, Vehicle, vehicle_id)
 
     db.delete(vehicle)
     db.commit()

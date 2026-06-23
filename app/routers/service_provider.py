@@ -1,10 +1,13 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import Session, col, select
+from fastapi import APIRouter, Depends, Query
+from sqlmodel import Session, func, select, col
 
 from app.database.session import get_db
+from app.dependencies.db_helpers import get_or_404, apply_updates
+from app.dependencies.pagination import PaginationParams, paginate
 from app.models.service_provider import ServiceProvider
+from app.schemas.pagination import PaginatedResponse
 from app.schemas.service_provider import (
     ServiceProviderCreate,
     ServiceProviderResponse,
@@ -25,33 +28,35 @@ def create_service_provider(
     return new_provider
 
 
-@router.get("/", response_model=list[ServiceProviderResponse])
+@router.get("/", response_model=PaginatedResponse[ServiceProviderResponse])
 def get_service_providers(
     name: Optional[str] = Query(default=None, description="Filter by name"),
     specialization: Optional[str] = Query(
         default=None, description="Filter by specialization"
     ),
-    limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+    pagination: PaginationParams = Depends(PaginationParams),
     db: Session = Depends(get_db),
 ):
-    query = select(ServiceProvider)
+    data_query = select(ServiceProvider)
+    count_query = select(func.count()).select_from(ServiceProvider)
+
     if name:
-        query = query.where(col(ServiceProvider.name).ilike(f"%{name}%"))
+        data_query = data_query.where(col(ServiceProvider.name).ilike(f"%{name}%"))
+        count_query = count_query.where(col(ServiceProvider.name).ilike(f"%{name}%"))
     if specialization:
-        query = query.where(
+        data_query = data_query.where(
             col(ServiceProvider.specialization).ilike(f"%{specialization}%")
         )
-    query = query.offset(offset).limit(limit)
-    return db.exec(query).all()
+        count_query = count_query.where(
+            col(ServiceProvider.specialization).ilike(f"%{specialization}%")
+        )
+
+    return paginate(db, data_query, count_query, pagination)
 
 
 @router.get("/{provider_id}", response_model=ServiceProviderResponse)
 def get_service_provider(provider_id: int, db: Session = Depends(get_db)):
-    provider = db.get(ServiceProvider, provider_id)
-    if not provider:
-        raise HTTPException(status_code=404, detail="Service provider not found")
-    return provider
+    return get_or_404(db, ServiceProvider, provider_id)
 
 
 @router.patch("/{provider_id}", response_model=ServiceProviderResponse)
@@ -61,26 +66,13 @@ def patch_service_provider(
     db: Session = Depends(get_db),
 ):
     """Partially update a service provider."""
-    provider = db.get(ServiceProvider, provider_id)
-    if not provider:
-        raise HTTPException(status_code=404, detail="Service provider not found")
-
-    updates = provider_data.model_dump(exclude_unset=True, exclude_none=True)
-    for field, value in updates.items():
-        setattr(provider, field, value)
-
-    db.add(provider)
-    db.commit()
-    db.refresh(provider)
-    return provider
+    provider = get_or_404(db, ServiceProvider, provider_id)
+    return apply_updates(db, provider, provider_data, exclude_none=True)
 
 
 @router.delete("/{provider_id}")
 def delete_service_provider(provider_id: int, db: Session = Depends(get_db)):
-    provider = db.get(ServiceProvider, provider_id)
-    if not provider:
-        raise HTTPException(status_code=404, detail="Service provider not found")
-
+    provider = get_or_404(db, ServiceProvider, provider_id)
     db.delete(provider)
     db.commit()
     return {"message": "Service provider deleted successfully"}
